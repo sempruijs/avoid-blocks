@@ -9,6 +9,9 @@ crate-type = ["cdylib"]
 [dependencies]
 bevy = "0.16"
 wasm-bindgen = "0.2"
+rand = "0.8"
+getrandom = { version = "0.2", features = ["js"] }
+
 
 # Enable optimization for faster dev builds
 [profile.dev]

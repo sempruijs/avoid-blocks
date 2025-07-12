@@ -1,6 +1,7 @@
 #![no_main]
 
 use bevy::prelude::*;
+use rand::Rng;
 use wasm_bindgen::prelude::*;
 
 #[derive(Component)]
@@ -69,17 +70,17 @@ fn move_player(
     for (mut transform, mut player) in &mut query {
         // Horizontal movement (left/right only)
         let mut horizontal_movement = 0.0;
-        
+
         if keyboard_input.pressed(KeyCode::KeyA) {
             horizontal_movement -= 1.0;
         }
         if keyboard_input.pressed(KeyCode::KeyD) {
             horizontal_movement += 1.0;
         }
-        
+
         // Apply horizontal movement
         transform.translation.x += horizontal_movement * 8.0 * time.delta_secs();
-        
+
         // Jump input
         if keyboard_input.just_pressed(KeyCode::Space) && player.is_grounded {
             player.velocity.y = 12.0; // Jump velocity
@@ -97,32 +98,31 @@ fn camera_follow(
         for mut camera_transform in &mut camera_query {
             let offset = Vec3::new(0.0, 4.5, 9.0);
             let target_position = player_transform.translation + offset;
-            
+
             // Smooth interpolation with lerp factor
             let lerp_factor = 2.0 * time.delta_secs();
-            camera_transform.translation = camera_transform.translation.lerp(target_position, lerp_factor);
+            camera_transform.translation = camera_transform
+                .translation
+                .lerp(target_position, lerp_factor);
             camera_transform.look_at(player_transform.translation, Vec3::Y);
         }
     }
 }
 
-fn apply_gravity(
-    mut query: Query<(&mut Transform, &mut Player)>,
-    time: Res<Time>,
-) {
+fn apply_gravity(mut query: Query<(&mut Transform, &mut Player)>, time: Res<Time>) {
     for (mut transform, mut player) in &mut query {
         // Apply gravity
         player.velocity.y -= 30.0 * time.delta_secs(); // Gravity force
-        
+
         // Apply velocity to position
         transform.translation += player.velocity * time.delta_secs();
-        
+
         // Check if player is on the plane (roughly)
         let plane_width = 4.0; // Half the width of the 8.0 wide platform
         let plane_length = 10.0; // Half the length of the 20.0 long platform
-        let is_on_plane = transform.translation.x.abs() <= plane_width && 
-                         transform.translation.z.abs() <= plane_length;
-        
+        let is_on_plane = transform.translation.x.abs() <= plane_width
+            && transform.translation.z.abs() <= plane_length;
+
         // Ground collision only if on the plane
         if is_on_plane && transform.translation.y <= 0.5 {
             transform.translation.y = 0.5;
@@ -131,7 +131,7 @@ fn apply_gravity(
         } else if !is_on_plane {
             player.is_grounded = false;
         }
-        
+
         // If player falls too far below the plane, teleport back
         if transform.translation.y < -10.0 {
             transform.translation = Vec3::new(0.0, 0.5, 8.0);
