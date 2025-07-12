@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use wasm_bindgen::prelude::*;
 
 #[derive(Component)]
-struct Player;
+struct Player {
+    velocity: Vec3,
+    is_grounded: bool,
+}
 
 #[derive(Component)]
 struct FollowCamera;
@@ -14,7 +17,7 @@ pub fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, (move_player, camera_follow))
+        .add_systems(Update, (move_player, apply_gravity, camera_follow))
         .run();
 }
 
@@ -25,7 +28,10 @@ fn setup(
 ) {
     // Spawn a cube (player)
     commands.spawn((
-        Player,
+        Player {
+            velocity: Vec3::ZERO,
+            is_grounded: true,
+        },
         Mesh3d(meshes.add(Mesh::from(Cuboid::new(1.0, 1.0, 1.0)))),
         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
         Transform::from_xyz(0.0, 0.5, 0.0),
@@ -57,28 +63,27 @@ fn setup(
 
 fn move_player(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<Player>>,
+    mut query: Query<(&mut Transform, &mut Player)>,
     time: Res<Time>,
 ) {
-    for mut transform in &mut query {
-        let mut direction = Vec3::ZERO;
+    for (mut transform, mut player) in &mut query {
+        // Horizontal movement (left/right only)
+        let mut horizontal_movement = 0.0;
         
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            direction.z -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            direction.z += 1.0;
-        }
         if keyboard_input.pressed(KeyCode::KeyA) {
-            direction.x -= 1.0;
+            horizontal_movement -= 1.0;
         }
         if keyboard_input.pressed(KeyCode::KeyD) {
-            direction.x += 1.0;
+            horizontal_movement += 1.0;
         }
         
-        if direction.length() > 0.0 {
-            direction = direction.normalize();
-            transform.translation += direction * 5.0 * time.delta_secs();
+        // Apply horizontal movement
+        transform.translation.x += horizontal_movement * 8.0 * time.delta_secs();
+        
+        // Jump input
+        if keyboard_input.just_pressed(KeyCode::Space) && player.is_grounded {
+            player.velocity.y = 12.0; // Jump velocity
+            player.is_grounded = false;
         }
     }
 }
@@ -97,6 +102,26 @@ fn camera_follow(
             let lerp_factor = 2.0 * time.delta_secs();
             camera_transform.translation = camera_transform.translation.lerp(target_position, lerp_factor);
             camera_transform.look_at(player_transform.translation, Vec3::Y);
+        }
+    }
+}
+
+fn apply_gravity(
+    mut query: Query<(&mut Transform, &mut Player)>,
+    time: Res<Time>,
+) {
+    for (mut transform, mut player) in &mut query {
+        // Apply gravity
+        player.velocity.y -= 30.0 * time.delta_secs(); // Gravity force
+        
+        // Apply velocity to position
+        transform.translation += player.velocity * time.delta_secs();
+        
+        // Ground collision (simple floor at y = 0.5)
+        if transform.translation.y <= 0.5 {
+            transform.translation.y = 0.5;
+            player.velocity.y = 0.0;
+            player.is_grounded = true;
         }
     }
 }
