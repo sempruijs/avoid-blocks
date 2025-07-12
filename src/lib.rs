@@ -1,5 +1,3 @@
-#![no_main]
-
 use bevy::prelude::*;
 use wasm_bindgen::prelude::*;
 
