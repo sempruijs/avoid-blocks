@@ -1,4 +1,5 @@
 /target
+native-target
 result
 .direnv
 .vscode/
@@ -7,3 +8,4 @@ result
 *.swo
 .DS_Store
 Thumbs.db
+dist
