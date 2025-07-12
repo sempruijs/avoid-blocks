@@ -18,9 +18,11 @@
     };
 
     flake-parts.url = "github:hercules-ci/flake-parts";
+
+    wasm-server-runner.url = "github:sempruijs/wasm-server-runner";
   };
 
-  outputs = inputs@{ self, fenix, crane, flake-parts, advisory-db, ... }:
+  outputs = inputs@{ self, fenix, crane, flake-parts, advisory-db, wasm-server-runner, ... }:
     flake-parts.lib.mkFlake { inherit self inputs; } ({ withSystem, ... }: {
       systems = [
         "x86_64-linux"
@@ -106,6 +108,7 @@
               pkgs.miniserve
               pkgs.dart-sass
               pkgs.wasm-bindgen-cli
+              wasm-server-runner.packages.${system}.default
             ];
 
             nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ ];

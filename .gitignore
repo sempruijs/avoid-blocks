@@ -1,4 +1,6 @@
 /target
+native-target
+debug
 result
 .direnv
 .vscode/
