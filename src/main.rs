@@ -86,11 +86,16 @@ fn move_player(
 fn camera_follow(
     player_query: Query<&Transform, (With<Player>, Without<FollowCamera>)>,
     mut camera_query: Query<&mut Transform, (With<FollowCamera>, Without<Player>)>,
+    time: Res<Time>,
 ) {
-    if let Ok(player_transform) = player_query.get_single() {
+    if let Ok(player_transform) = player_query.single() {
         for mut camera_transform in &mut camera_query {
             let offset = Vec3::new(0.0, 4.5, 9.0);
-            camera_transform.translation = player_transform.translation + offset;
+            let target_position = player_transform.translation + offset;
+            
+            // Smooth interpolation with lerp factor
+            let lerp_factor = 2.0 * time.delta_secs();
+            camera_transform.translation = camera_transform.translation.lerp(target_position, lerp_factor);
             camera_transform.look_at(player_transform.translation, Vec3::Y);
         }
     }
