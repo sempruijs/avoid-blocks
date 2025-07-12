@@ -6,12 +6,15 @@ use wasm_bindgen::prelude::*;
 #[derive(Component)]
 struct Player;
 
+#[derive(Component)]
+struct FollowCamera;
+
 #[wasm_bindgen(start)]
 pub fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_systems(Update, move_player)
+        .add_systems(Update, (move_player, camera_follow))
         .run();
 }
 
@@ -30,6 +33,7 @@ fn setup(
 
     // Add a camera
     commands.spawn((
+        FollowCamera,
         Camera3d::default(),
         Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
@@ -75,6 +79,19 @@ fn move_player(
         if direction.length() > 0.0 {
             direction = direction.normalize();
             transform.translation += direction * 5.0 * time.delta_secs();
+        }
+    }
+}
+
+fn camera_follow(
+    player_query: Query<&Transform, (With<Player>, Without<FollowCamera>)>,
+    mut camera_query: Query<&mut Transform, (With<FollowCamera>, Without<Player>)>,
+) {
+    if let Ok(player_transform) = player_query.get_single() {
+        for mut camera_transform in &mut camera_query {
+            let offset = Vec3::new(0.0, 4.5, 9.0);
+            camera_transform.translation = player_transform.translation + offset;
+            camera_transform.look_at(player_transform.translation, Vec3::Y);
         }
     }
 }
