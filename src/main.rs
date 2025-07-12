@@ -34,7 +34,7 @@ fn setup(
         },
         Mesh3d(meshes.add(Mesh::from(Cuboid::new(1.0, 1.0, 1.0)))),
         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
-        Transform::from_xyz(0.0, 0.5, 0.0),
+        Transform::from_xyz(0.0, 0.5, 8.0),
     ));
 
     // Add a camera
@@ -53,11 +53,11 @@ fn setup(
         Transform::from_xyz(4.0, 8.0, 4.0),
     ));
 
-    // Add a plane
+    // Add a platform (thick plane)
     commands.spawn((
-        Mesh3d(meshes.add(Mesh::from(Plane3d::default().mesh().size(5.0, 5.0)))),
+        Mesh3d(meshes.add(Mesh::from(Cuboid::new(8.0, 0.5, 20.0)))),
         MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
-        Transform::default(),
+        Transform::from_xyz(0.0, -0.25, 0.0),
     ));
 }
 
@@ -118,9 +118,10 @@ fn apply_gravity(
         transform.translation += player.velocity * time.delta_secs();
         
         // Check if player is on the plane (roughly)
-        let plane_bounds = 2.5; // Half the size of the 5x5 plane
-        let is_on_plane = transform.translation.x.abs() <= plane_bounds && 
-                         transform.translation.z.abs() <= plane_bounds;
+        let plane_width = 4.0; // Half the width of the 8.0 wide platform
+        let plane_length = 10.0; // Half the length of the 20.0 long platform
+        let is_on_plane = transform.translation.x.abs() <= plane_width && 
+                         transform.translation.z.abs() <= plane_length;
         
         // Ground collision only if on the plane
         if is_on_plane && transform.translation.y <= 0.5 {
@@ -133,7 +134,7 @@ fn apply_gravity(
         
         // If player falls too far below the plane, teleport back
         if transform.translation.y < -10.0 {
-            transform.translation = Vec3::new(0.0, 0.5, 0.0);
+            transform.translation = Vec3::new(0.0, 0.5, 8.0);
             player.velocity = Vec3::ZERO;
             player.is_grounded = true;
         }
