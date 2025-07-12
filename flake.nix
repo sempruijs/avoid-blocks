@@ -1,118 +1,131 @@
 {
-  description = "Rust with WASM target";
-
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    naersk.url = "github:nix-community/naersk";
-    wasm-server-runner.url = "github:sempruijs/wasm-server-runner";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
+
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, naersk, wasm-server-runner }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        overlays = [ rust-overlay.overlays.default ];
-        pkgs = import nixpkgs {
-          inherit system overlays;
-        };
+  outputs = inputs@{ self, fenix, crane, flake-parts, advisory-db, ... }:
+    flake-parts.lib.mkFlake { inherit self inputs; } ({ withSystem, ... }: {
+      systems = [
+        "x86_64-linux"
+        "x86_64-darwin"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
 
-        rust = pkgs.rust-bin.stable.latest.default.override {
-          targets = [ "wasm32-unknown-unknown" ];
-        };
-        
-        naersk' = naersk.lib.${system}.override {
-          cargo = rust;
-          rustc = rust;
-        };
-      in {
-        packages.default = naersk'.buildPackage {
-          src = ./.;
-          
-          nativeBuildInputs = with pkgs; [ wasm-bindgen-cli binaryen ];
-          
-          CARGO_BUILD_TARGET = "wasm32-unknown-unknown";
-          
-          postBuild = ''
-            # Generate bindings using wasm-bindgen
-            wasm-bindgen \
-              --out-dir pkg \
-              --out-name bevy-hello-world \
-              --target web \
-              target/wasm32-unknown-unknown/release/bevy_hello_world.wasm
+      perSystem = { lib, config, self', inputs', pkgs, system, ... }:
+        let
+          rustToolchain = with fenix.packages.${system};
+            combine [
+              (latest.withComponents [
+                "rustc"
+                "cargo"
+                "rustfmt"
+                "clippy"
+                "rust-src"
+              ])
+
+              targets.wasm32-unknown-unknown.latest.rust-std
+            ];
+
+          craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+          commonArgs = rec {
+            pname = "nix-bevy-wasm";
+            version = "v0.1.0";
+
+            src = lib.cleanSourceWith {
+              src = ./.;
+              filter = path: type:
+                (lib.hasSuffix "\.html" path) ||
+                (lib.hasSuffix "\.scss" path) ||
+                (lib.hasInfix "/assets/" path) ||
+                (craneLib.filterCargoSources path type)
+              ;
+            };
+
+            buildInputs = [ ];
+            nativeBuildInputs = with pkgs; [ clang lld ];
+
+            strictDeps = true;
+            doCheck = false;
+
+            CARGO_BUILD_TARGET = "wasm32-unknown-unknown";
+          };
+
+          cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { doCheck = false; });
+
+          clippy-check = craneLib.cargoClippy (commonArgs // {
+            inherit cargoArtifacts;
+
+            cargoClippyExtraArgs = "--all-features -- --deny warnings";
+          });
+
+          rust-fmt-check = craneLib.cargoFmt ({
+            inherit (commonArgs) src;
+          });
+
+          audit-check = craneLib.cargoAudit ({
+            inherit (commonArgs) src;
+            inherit advisory-db;
+          });
+
+          package = craneLib.buildTrunkPackage (commonArgs // {
+            inherit cargoArtifacts;
             
-            # Optimize with wasm-opt
-            wasm-opt -Oz -o pkg/bevy-hello-world_bg.wasm pkg/bevy-hello-world_bg.wasm
-          '';
-          
-          installPhase = ''
-            mkdir -p $out
-            
-            # Copy generated WASM files
-            cp pkg/bevy-hello-world.js $out/
-            cp pkg/bevy-hello-world_bg.wasm $out/
-            
-            # Create index.html
-            cat > $out/index.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Bevy Hello World</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #222;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            border: 1px solid #444;
-            max-width: 100%;
-            max-height: 100%;
-        }
-        .container {
-            text-align: center;
-        }
-        h1 {
-            color: white;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Bevy Hello World</h1>
-        <canvas id="bevy-canvas"></canvas>
-    </div>
-    
-    <script type="module">
-        import init from './bevy-hello-world.js';
-        
-        async function run() {
-            await init();
-        }
-        
-        run();
-    </script>
-</body>
-</html>
-EOF
-          '';
+            wasm-bindgen-cli = pkgs.wasm-bindgen-cli;
+
+            fixupPhase = ''
+              substituteInPlace $out/index.html \
+                --replace '"/' '"./' \
+                --replace "'/" "'./"
+            '';
+          });
+        in
+        {
+          devShells.default = pkgs.mkShell {
+            buildInputs = commonArgs.buildInputs ++ [
+              rustToolchain
+              pkgs.trunk
+              pkgs.dart-sass
+              pkgs.wasm-bindgen-cli
+            ];
+
+            nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ ];
+            CARGO_BUILD_TARGET = "wasm32-unknown-unknown";
+          };
+
+          packages.default = package;
+
+          checks =
+            {
+              inherit clippy-check rust-fmt-check audit-check;
+              inherit (builtins.attrValues self.packages);
+            };
+
+          formatter = pkgs.nixpkgs-fmt;
         };
-        
-        devShells.default = pkgs.mkShell {
-          buildInputs = [
-            rust
-            pkgs.wasm-pack  # optional, for wasm-pack support
-            wasm-server-runner.packages.${system}.default
-            pkgs.trunk
-          ];
-        };
-      }
-    );
+    });
+
+  nixConfig = {
+    extra-trusted-substituters = [ "https://nix-community.cachix.org" ];
+    extra-trusted-public-keys = [ "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=" ];
+  };
 }
+
