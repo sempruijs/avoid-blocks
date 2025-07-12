@@ -103,6 +103,7 @@
             buildInputs = commonArgs.buildInputs ++ [
               rustToolchain
               pkgs.trunk
+              pkgs.miniserve
               pkgs.dart-sass
               pkgs.wasm-bindgen-cli
             ];
