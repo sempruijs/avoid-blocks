@@ -14,7 +14,13 @@ struct Player {
 struct BlockSpawnTimer(Timer);
 
 #[derive(Component)]
+struct Velocity(Vec3);
+
+#[derive(Component)]
 struct FollowCamera;
+
+#[derive(Component)]
+struct Obstacle;
 
 #[derive(Resource)]
 struct BlockMeshMaterialHandles {
@@ -32,7 +38,8 @@ pub fn main() {
         )))
         .add_systems(Startup, setup)
         .add_systems(Update, (move_player, apply_gravity, camera_follow))
-        .add_systems(Update, spawn_block_every_5_seconds)
+        .add_systems(Update, spawn_obstacles)
+        .add_systems(Update, move_velocity)
         .run();
 }
 
@@ -164,16 +171,22 @@ fn apply_gravity(mut query: Query<(&mut Transform, &mut Player)>, time: Res<Time
     }
 }
 
-fn spawn_block_every_5_seconds(
+fn spawn_obstacles(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<BlockSpawnTimer>,
     handles: Res<BlockMeshMaterialHandles>,
 ) {
     if timer.0.tick(time.delta()).just_finished() {
-        let position = Vec3::new(0.0, 0.5, 0.0);
+        let mut rng = rand::thread_rng();
+        let x = rng.gen_range(-4.0..=4.0); // X range
+        let z = 0.0;
+
+        let position = Vec3::new(x, 0.5, z);
 
         commands.spawn((
+            Obstacle,
+            Velocity(Vec3::new(0.0, 0.0, 3.0)),
             Mesh3d(handles.mesh.clone()),
             MeshMaterial3d(handles.material.clone()),
             Transform::from_translation(position),
@@ -181,5 +194,11 @@ fn spawn_block_every_5_seconds(
         ));
 
         println!("Spawned a 3D block at {:?}", position);
+    }
+}
+
+fn move_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
+    for (mut transform, velocity) in &mut query {
+        transform.translation += velocity.0 * time.delta_secs();
     }
 }
