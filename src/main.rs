@@ -10,15 +10,29 @@ struct Player {
     is_grounded: bool,
 }
 
+#[derive(Resource)]
+struct BlockSpawnTimer(Timer);
+
 #[derive(Component)]
 struct FollowCamera;
+
+#[derive(Resource)]
+struct BlockMeshMaterialHandles {
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+}
 
 #[wasm_bindgen(start)]
 pub fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .insert_resource(BlockSpawnTimer(Timer::from_seconds(
+            5.0,
+            TimerMode::Repeating,
+        )))
         .add_systems(Startup, setup)
         .add_systems(Update, (move_player, apply_gravity, camera_follow))
+        .add_systems(Update, spawn_block_every_5_seconds)
         .run();
 }
 
@@ -27,6 +41,15 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let block_mesh = meshes.add(Mesh::from(Cuboid::new(1.0, 1.0, 1.0)));
+    let block_material = materials.add(Color::srgb(1.0, 0.2, 0.3));
+
+    // Store the block handles for later use in a resource
+    commands.insert_resource(BlockMeshMaterialHandles {
+        mesh: block_mesh.clone(),
+        material: block_material.clone(),
+    });
+
     // Spawn a cube (player)
     commands.spawn((
         Player {
@@ -138,5 +161,25 @@ fn apply_gravity(mut query: Query<(&mut Transform, &mut Player)>, time: Res<Time
             player.velocity = Vec3::ZERO;
             player.is_grounded = true;
         }
+    }
+}
+
+fn spawn_block_every_5_seconds(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut timer: ResMut<BlockSpawnTimer>,
+    handles: Res<BlockMeshMaterialHandles>,
+) {
+    if timer.0.tick(time.delta()).just_finished() {
+        let position = Vec3::new(0.0, 0.5, 0.0);
+
+        commands.spawn((
+            Mesh3d(handles.mesh.clone()),
+            MeshMaterial3d(handles.material.clone()),
+            Transform::from_translation(position),
+            GlobalTransform::default(), // Required for rendering
+        ));
+
+        println!("Spawned a 3D block at {:?}", position);
     }
 }
