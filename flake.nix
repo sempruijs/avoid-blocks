@@ -41,6 +41,7 @@
                 "rustfmt"
                 "clippy"
                 "rust-src"
+                "rust-analyzer"
               ])
 
               targets.wasm32-unknown-unknown.latest.rust-std

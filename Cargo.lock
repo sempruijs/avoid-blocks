@@ -307,6 +307,8 @@ name = "bevy-hello-world"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "getrandom 0.2.16",
+ "rand",
  "wasm-bindgen",
 ]
 
